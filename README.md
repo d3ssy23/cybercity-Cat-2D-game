@@ -1,2 +1,7 @@
 # cybercity-Cat-2D-game
-A simple 2D runner game in C with raylib framework
+An easy 2D runner game in C with raylib framework
+
+## Ready to use with Makefile
+* /src
+* $: make
+* Go!
