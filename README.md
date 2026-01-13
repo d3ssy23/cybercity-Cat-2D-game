@@ -1,12 +1,4 @@
-<<<<<<< HEAD
-# cybercity-Cat-2D-game
-An easy 2D runner game in C with raylib framework
 
-## Ready to use with Makefile
-* /src
-* $: make
-* Go!
-=======
 # CyberCity Cat
 
 A 2D endless runner game built with C and raylib. Control a cat character as you navigate through platforms, collect coins, and avoid zombies in a cyberpunk cityscape.
