@@ -2,6 +2,7 @@
 #define PLATFORMS_H
 #include "raylib.h"
 #include "lib.h"
+#include <math.h>
 
 #define MAX_PLATFORMS 2
 
@@ -46,6 +47,27 @@ void scale_tile(Platform *platform){
     platforms->Theight *= tileScale;
 }
 
+// Check if a platform position would overlap with existing platforms
+bool CheckPlatformOverlap(Platform* platformArray, int arraySize, float x, float y, float width, float minDistance) {
+    for (int i = 0; i < arraySize; i++) {
+        if (platformArray[i].positionX < screenWidth + 500.0f && platformArray[i].positionX > -500.0f) {
+            // Check horizontal overlap
+            float platformRight = platformArray[i].positionX + platformArray[i].Twidth;
+            float newPlatformRight = x + width;
+            
+            // Check if platforms are too close horizontally
+            if (!(newPlatformRight < platformArray[i].positionX - minDistance || 
+                  x > platformRight + minDistance)) {
+                // Check vertical overlap (if they're close horizontally, check Y)
+                float verticalDistance = fabs(y - platformArray[i].positionY);
+                if (verticalDistance < 50.0f) { // If platforms are at similar Y, they overlap
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 
 void SpawnPlatform(int i, float x, float y) {
    // for(int j=0; j<i;j++){

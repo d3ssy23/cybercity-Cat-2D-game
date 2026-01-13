@@ -10,7 +10,14 @@ enum CatState {
     DEAD
 };
 
+enum GameState {
+    MENU,
+    PLAYING,
+    GAME_OVER
+};
+
 enum CatState currentState = RUNNING;
+enum GameState gameState = MENU;
 
  // background move speed
  float scrollingBack = 0.0f;

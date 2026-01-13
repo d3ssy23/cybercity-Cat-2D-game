@@ -38,8 +38,8 @@ int main(void)
      int currentFrame = 0;
      int framesCounter = 0;
      int framesSpeed = 6;
-     int randValuePlatformsY = 30;
-     int randValuePlatformsY2 = 40;
+     int randValuePlatformsY = GetRandomValue(200, 300);
+     int randValuePlatformsY2 = GetRandomValue(250, 350);
      int midPlatformCount = GetRandomValue(1,4);
      int heartDecreaseCooldown = 0.0f;
 
@@ -198,13 +198,20 @@ float spawnDistance = 2.0f;
     camera.offset = (Vector2){ 0, 0 };
     camera.zoom = 1.0f;
 
-    //Platforms
+    //Platforms - Initialize off-screen so they don't spawn at game start
     for(int i = 0; i < MAX_PLATFORMS;i++){
-       // platformCycle();
-
-        SpawnPlatform(i, screenWidth + i * 200.0f, GetRandomValue(300, 400));
-       
-
+        // Initialize pl1 and pl2 off-screen (far to the right, outside visible area)
+        pl1[i].positionX = screenWidth + 1000.0f + i * 400.0f; // Start far off-screen
+        pl1[i].positionY = randValuePlatformsY; // Use the initialized random Y value
+        pl1[i].midCount = GetRandomValue(3, 8); // Limit platform length
+        get_width_height(&pl1[i]);
+        scale_tile(&pl1[i]);
+        
+        pl2[i].positionX = screenWidth + 1200.0f + i * 400.0f; // Start far off-screen
+        pl2[i].positionY = randValuePlatformsY2; // Use the initialized random Y value
+        pl2[i].midCount = GetRandomValue(3, 8); // Limit platform length
+        get_width_height(&pl2[i]);
+        scale_tile(&pl2[i]);
     }
   
 
@@ -212,10 +219,10 @@ float spawnDistance = 2.0f;
 
     while (!WindowShouldClose())    // Detect window close button or ESC key
     {
-
-  
-        bool movingUp = true;
-        currentState = RUNNING;
+        // Handle game state transitions
+        if(gameState == PLAYING) {
+            bool movingUp = true;
+            currentState = RUNNING;
 
 
 
@@ -235,13 +242,24 @@ float spawnDistance = 2.0f;
 {
     if(!zombies[i].active){
     zombies[i].active = true;
-    zombies[i].positions.x = screenWidth + GetRandomValue(50,150);
+    // Spawn zombies further away initially, like platforms
+    zombies[i].positions.x = screenWidth + GetRandomValue(800, 1200);
     zombies[i].positions.y = GetRandomValue(280,360);
-    zombiePositions[i].x = screenWidth - GetRandomValue(50,150);
+    zombiePositions[i].x = screenWidth + GetRandomValue(800, 1200);
     zombiePositions[i].y = GetRandomValue(280,360);
     }
  //  Zombie + cat collision - health decrament
-    Rectangle zombieRect = {zombiePosition.x,zombiePosition.y,frameZombie.width * zombieScale.x,frameZombie.height * zombieScale.y};
+    // Make zombie collision box much smaller (60% of size) for accurate collision
+    float zombieCollisionWidth = frameZombie.width * zombieScale.x * 0.6f;
+    float zombieCollisionHeight = frameZombie.height * zombieScale.y * 0.6f;
+    float zombieCollisionOffsetX = frameZombie.width * zombieScale.x * 0.2f; // Center the smaller box
+    float zombieCollisionOffsetY = frameZombie.height * zombieScale.y * 0.2f;
+    Rectangle zombieRect = {
+        zombiePosition.x + zombieCollisionOffsetX,
+        zombiePosition.y + zombieCollisionOffsetY,
+        zombieCollisionWidth,
+        zombieCollisionHeight
+    };
 
     for (int i = 0; i < ZOMBIE_COUNT; i++) {
            
@@ -256,7 +274,7 @@ float spawnDistance = 2.0f;
             if(heart_count == 0){
                 is_dead = true;
                 currentState = DEAD;
-                break;
+                gameState = GAME_OVER;
             }
 
         }
@@ -457,8 +475,9 @@ float spawnDistance = 2.0f;
        for (int i = 0; i < MAX_PLATFORMS; i++) {
         
 
-        pl1[i].positionY = randValuePlatformsY;
-        pl2[i].positionY = randValuePlatformsY2;
+        // Don't modify platform Y position every frame - only set it when respawning
+        // pl1[i].positionY = randValuePlatformsY;
+        // pl2[i].positionY = randValuePlatformsY2;
 
         if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_SPACE) || IsKeyDown(KEY_DOWN)){
 
@@ -472,66 +491,232 @@ float spawnDistance = 2.0f;
 
         }
         if (pl1[i].positionX < -150.0f) {
-           
-            pl1[i].positionX = screenWidth + pl1->Twidth + 150.0f ;
-
-            randValuePlatformsY = GetRandomValue(200,250);
-
-            pl1[i].midCount = GetRandomValue(10,90);
-
-
+            // Only spawn new platform if game has started (player is moving)
+            if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_SPACE) || IsKeyDown(KEY_DOWN)) {
+                float newX = screenWidth + pl1[i].Twidth + 150.0f;
+                float newY = GetRandomValue(200, 300);
+                float minDistance = 50.0f; // Reduced minimum distance to allow connections
+                
+                // Check if we should create a connected platform (30% chance)
+                bool createConnected = (GetRandomValue(0, 100) < 30);
+                
+                if(createConnected) {
+                    // Find the rightmost platform to connect to
+                    float rightmostX = -1000.0f;
+                    float connectY = newY;
+                    
+                    for(int j = 0; j < MAX_PLATFORMS; j++) {
+                        if(pl1[j].positionX > rightmostX && pl1[j].positionX < screenWidth + 500.0f) {
+                            rightmostX = pl1[j].positionX + pl1[j].Twidth;
+                            connectY = pl1[j].positionY;
+                        }
+                        if(pl2[j].positionX > rightmostX && pl2[j].positionX < screenWidth + 500.0f) {
+                            rightmostX = pl2[j].positionX + pl2[j].Twidth;
+                            connectY = pl2[j].positionY;
+                        }
+                    }
+                    
+                    // Place platform directly connected (no gap or very small gap)
+                    if(rightmostX > -500.0f) {
+                        newX = rightmostX + GetRandomValue(0, 20); // Small gap or connected
+                        newY = connectY; // Same Y level for connection
+                    }
+                }
+                
+                // Try to find a non-overlapping position (but allow connections)
+                int attempts = 0;
+                while (attempts < 20) {
+                    bool overlapsPl1 = CheckPlatformOverlap(pl1, MAX_PLATFORMS, newX, newY, pl1[i].Twidth, minDistance);
+                    bool overlapsPl2 = CheckPlatformOverlap(pl2, MAX_PLATFORMS, newX, newY, pl1[i].Twidth, minDistance);
+                    
+                    // Allow connection if platforms are at same Y and close
+                    bool isConnection = false;
+                    for(int j = 0; j < MAX_PLATFORMS; j++) {
+                        float yDiff = fabs(newY - pl1[j].positionY);
+                        float xDiff = fabs(newX - (pl1[j].positionX + pl1[j].Twidth));
+                        if(yDiff < 10.0f && xDiff < 30.0f) {
+                            isConnection = true;
+                            break;
+                        }
+                        yDiff = fabs(newY - pl2[j].positionY);
+                        xDiff = fabs(newX - (pl2[j].positionX + pl2[j].Twidth));
+                        if(yDiff < 10.0f && xDiff < 30.0f) {
+                            isConnection = true;
+                            break;
+                        }
+                    }
+                    
+                    if ((!overlapsPl1 && !overlapsPl2) || isConnection) {
+                        break; // Found a good position or connection
+                    }
+                    // Try a new random position
+                    newX = screenWidth + pl1[i].Twidth + 150.0f + GetRandomValue(0, 200);
+                    newY = GetRandomValue(200, 300);
+                    attempts++;
+                }
+                
+                pl1[i].positionX = newX;
+                randValuePlatformsY = newY;
+                pl1[i].positionY = newY;
+                pl1[i].midCount = GetRandomValue(3, 8); // Limit platform length
+                get_width_height(&pl1[i]);
+                scale_tile(&pl1[i]);
+            } else {
+                // Keep platform off-screen if game hasn't started
+                pl1[i].positionX = screenWidth + 1000.0f;
+            }
         }
         if( pl2[i].positionX < -400.0f){
-            pl2[i].positionX = screenWidth + pl2->Twidth + 150.0f ;
-            randValuePlatformsY2 = GetRandomValue(250,300);
-            pl2[i].midCount = 6;
-
+            // Only spawn new platform if game has started (player is moving)
+            if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_SPACE) || IsKeyDown(KEY_DOWN)) {
+                float newX = screenWidth + pl2[i].Twidth + 150.0f;
+                float newY = GetRandomValue(250, 350);
+                float minDistance = 50.0f; // Reduced minimum distance to allow connections
+                
+                // Check if we should create a connected platform (30% chance)
+                bool createConnected = (GetRandomValue(0, 100) < 30);
+                
+                if(createConnected) {
+                    // Find the rightmost platform to connect to
+                    float rightmostX = -1000.0f;
+                    float connectY = newY;
+                    
+                    for(int j = 0; j < MAX_PLATFORMS; j++) {
+                        if(pl1[j].positionX > rightmostX && pl1[j].positionX < screenWidth + 500.0f) {
+                            rightmostX = pl1[j].positionX + pl1[j].Twidth;
+                            connectY = pl1[j].positionY;
+                        }
+                        if(pl2[j].positionX > rightmostX && pl2[j].positionX < screenWidth + 500.0f) {
+                            rightmostX = pl2[j].positionX + pl2[j].Twidth;
+                            connectY = pl2[j].positionY;
+                        }
+                    }
+                    
+                    // Place platform directly connected (no gap or very small gap)
+                    if(rightmostX > -500.0f) {
+                        newX = rightmostX + GetRandomValue(0, 20); // Small gap or connected
+                        newY = connectY; // Same Y level for connection
+                    }
+                }
+                
+                // Try to find a non-overlapping position (but allow connections)
+                int attempts = 0;
+                while (attempts < 20) {
+                    bool overlapsPl1 = CheckPlatformOverlap(pl1, MAX_PLATFORMS, newX, newY, pl2[i].Twidth, minDistance);
+                    bool overlapsPl2 = CheckPlatformOverlap(pl2, MAX_PLATFORMS, newX, newY, pl2[i].Twidth, minDistance);
+                    
+                    // Allow connection if platforms are at same Y and close
+                    bool isConnection = false;
+                    for(int j = 0; j < MAX_PLATFORMS; j++) {
+                        float yDiff = fabs(newY - pl1[j].positionY);
+                        float xDiff = fabs(newX - (pl1[j].positionX + pl1[j].Twidth));
+                        if(yDiff < 10.0f && xDiff < 30.0f) {
+                            isConnection = true;
+                            break;
+                        }
+                        yDiff = fabs(newY - pl2[j].positionY);
+                        xDiff = fabs(newX - (pl2[j].positionX + pl2[j].Twidth));
+                        if(yDiff < 10.0f && xDiff < 30.0f) {
+                            isConnection = true;
+                            break;
+                        }
+                    }
+                    
+                    if ((!overlapsPl1 && !overlapsPl2) || isConnection) {
+                        break; // Found a good position or connection
+                    }
+                    // Try a new random position
+                    newX = screenWidth + pl2[i].Twidth + 150.0f + GetRandomValue(0, 200);
+                    newY = GetRandomValue(250, 350);
+                    attempts++;
+                }
+                
+                pl2[i].positionX = newX;
+                randValuePlatformsY2 = newY;
+                pl2[i].positionY = newY;
+                pl2[i].midCount = GetRandomValue(3, 8); // Limit platform length
+                get_width_height(&pl2[i]);
+                scale_tile(&pl2[i]);
+            } else {
+                // Keep platform off-screen if game hasn't started
+                pl2[i].positionX = screenWidth + 1200.0f;
+            }
         }
       
 
     }
         // Collision platform + cat
+        bool isOnPlatform = false;
         for (int i = 0; i < MAX_PLATFORMS; i++) {
            
-            Rectangle platformRect = {pl1[i].positionX,pl1[i].positionY,pl1[i].Twidth +120.0f,pl1[i].Theight + 120.0f};
-            Rectangle platformRect2 = {pl2[i].positionX,pl2[i].positionY,pl2[i].Twidth +120.0f,pl2[i].Theight + 120.0f};
+            Rectangle platformRect = {pl1[i].positionX,pl1[i].positionY,pl1[i].Twidth,pl1[i].Theight};
+            Rectangle platformRect2 = {pl2[i].positionX,pl2[i].positionY,pl2[i].Twidth,pl2[i].Theight};
 
-                if(CheckCollisionRecs(catRect,platformRect)){
-                    catPlatformCollision = true; 
-                   
-                    if(catPosition.y + catRect.height<= pl1[i].positionY +pl1[i].Theight +10.0f){
+            // Check platform 1
+            float catFeetY = catPosition.y + catRect.height;
+            float catRightX = catPosition.x + catRect.width; // Cat's actual right edge
+            float platformTopY = pl1[i].positionY;
+            float platformBottomY = pl1[i].positionY + pl1[i].Theight;
+            float platformLeftX = pl1[i].positionX;
+            float platformRightX = pl1[i].positionX + pl1[i].Twidth;
+            
+            // Cat is on platform ONLY if: 
+            // 1. Feet are on platform top (within small tolerance)
+            // 2. Cat's RIGHT EDGE is still BEFORE the platform's right edge (strict check)
+            // Cat falls immediately when right edge reaches or passes platform edge
+            if(catFeetY >= platformTopY - 3.0f && catFeetY <= platformBottomY + 5.0f){
+                // Use a small offset (5 pixels) so cat falls slightly before visually passing edge
+                // This makes it feel more responsive
+                float platformRightEdge = platformRightX - 5.0f;
+                // Cat is on platform only if its right edge is strictly before the adjusted edge
+                if(catRightX > platformLeftX && catRightX < platformRightEdge){
+                    catPlatformCollision = true;
+                    isOnPlatform = true;
+                    // Set cat position to platform top - don't modify platform position
                     catPosition.y = pl1[i].positionY - catRect.height + 1.0f;
-
-                    if(currentState == JUMPING){
-                        //pl1[i].positionY += 0.4;
-                        catPosition.y = pl1[i].positionY  - catRect.height - 1.0f;
-                       // catPosition.y -= 10.0f;
-                    }
                 }
             }
-                if(CheckCollisionRecs(catRect,platformRect2)){
-                    catPlatformCollision = true; 
-                   
-                    if(catPosition.y + catRect.height<= pl2[i].positionY +pl2[i].Theight +10.0f){
+            
+            // Check platform 2
+            platformTopY = pl2[i].positionY;
+            platformBottomY = pl2[i].positionY + pl2[i].Theight;
+            platformLeftX = pl2[i].positionX;
+            platformRightX = pl2[i].positionX + pl2[i].Twidth;
+            
+            // Cat is on platform ONLY if: 
+            // 1. Feet are on platform top (within small tolerance)
+            // 2. Cat's RIGHT EDGE is still BEFORE the platform's right edge (strict check)
+            // Cat falls immediately when right edge reaches or passes platform edge
+            if(catFeetY >= platformTopY - 3.0f && catFeetY <= platformBottomY + 5.0f){
+                // Use a small offset (5 pixels) so cat falls slightly before visually passing edge
+                // This makes it feel more responsive
+                float platformRightEdge = platformRightX - 5.0f;
+                // Cat is on platform only if its right edge is strictly before the adjusted edge
+                if(catRightX > platformLeftX && catRightX < platformRightEdge){
+                    catPlatformCollision = true;
+                    isOnPlatform = true;
+                    // Set cat position to platform top - don't modify platform position
                     catPosition.y = pl2[i].positionY - catRect.height + 1.0f;
-
-                    if(currentState == JUMPING){
-                        //pl1[i].positionY += 0.4;
-                        catPosition.y = pl2[i].positionY  - catRect.height - 1.0f;
-                       // catPosition.y -= 10.0f;
-                    }
                 }
-   
             }
-                
+        }
+        
+        // If cat is not on any platform and not jumping, make it fall
+        if(!isOnPlatform && currentState != JUMPING && gameState == PLAYING){
+            if(catPosition.y < screenHeight - 100.0f){
+                catPosition.y += ySpeed;
             }
+        }
+        } // End of PLAYING state
 
 
 
         // NOTE: Texture is scaled twice its size, so it sould be considered on scrolling
-        if (scrollingBack <= -background.width*2) scrollingBack = 0;
-        if (scrollingMid <= -midground.width*2) scrollingMid = 0;
-        if (scrollingFore <= -foreground.width*2) scrollingFore = 0;
+        if(gameState == PLAYING) {
+            if (scrollingBack <= -background.width*2) scrollingBack = 0;
+            if (scrollingMid <= -midground.width*2) scrollingMid = 0;
+            if (scrollingFore <= -foreground.width*2) scrollingFore = 0;
+        }
        
 
 // ------------------------DRAW---------------------
@@ -539,7 +724,8 @@ float spawnDistance = 2.0f;
 
             ClearBackground(GetColor(0x052c46ff));
 
-           
+        // Draw game elements only when playing
+        if(gameState == PLAYING) {
 // Draw background image
            
             DrawTextureEx(background, (Vector2){ scrollingBack, 20 }, 0.0f, 2.0f, WHITE);
@@ -609,7 +795,6 @@ float spawnDistance = 2.0f;
             0.0f,
             WHITE
         );
-        return 0;
     }
     
 
@@ -659,27 +844,100 @@ float spawnDistance = 2.0f;
         }
            // DrawTextureRec(heart,frameRecHeart,heartPosition,WHITE);
 
-            DrawText(TextFormat("X: %.2f", zombiePosition.x), 20, 100, 20, GREEN);
-            for(int i =0;i<MAX_PLATFORMS;i++){
-            DrawText(TextFormat("X platform: %.2f", pl1[i].positionX), 30, 130, 30, GREEN);
-            }
-// Colliosion lines: 
-
-    DrawRectangleLines(catRect.x, catRect.y, catRect.width, catRect.height, RED);
-        // get_width_height(&pl1[MAX_PLATFORMS]); 
-
-    for (int i = 0; i < ZOMBIE_COUNT; i++) {
-
-        DrawRectangleLines(zombiePosition.x, zombiePosition.y, frameZombie.width * zombieScale.x,frameZombie.height * zombieScale.y,  GREEN);
-    }
-    for (int i = 0;i<heart_count;i++){
-        DrawRectangleLines( heartPositions[i].x, heartPositions[i].y, frameRecHeart.width * heartScale.x, frameRecHeart.height * heartScale.y, BLUE);
-
-    }
 
             
             DrawText("Follow the Way", 10, 10, 20, RED);
             DrawText("(c) Cyberpunk Street Environment by Luis Zuno (@ansimuz)", screenWidth - 330, screenHeight - 20, 10, RAYWHITE);
+        } // End of PLAYING state drawing
+        
+        // Draw menu screen
+        if(gameState == MENU) {
+            // Draw background (static)
+            DrawTextureEx(background, (Vector2){ 0, 20 }, 0.0f, 2.0f, WHITE);
+            DrawTextureEx(midground, (Vector2){ 0, 20 }, 0.0f, 2.0f, WHITE);
+            DrawTextureEx(foreground, (Vector2){ 0, 70 }, 0.0f, 2.0f, WHITE);
+            
+            // Blur effect (semi-transparent overlay)
+            DrawRectangle(0, 0, screenWidth, screenHeight, (Color){0, 0, 0, 180});
+            
+            // Title
+            const char* title = "CyberCity Cat";
+            int titleFontSize = 60;
+            int titleWidth = MeasureText(title, titleFontSize);
+            DrawText(title, screenWidth/2 - titleWidth/2, screenHeight/2 - 120, titleFontSize, GOLD);
+            
+            // Start button
+            Rectangle startButton = {screenWidth/2 - 100, screenHeight/2 - 20, 200, 50};
+            bool mouseOnStartButton = CheckCollisionPointRec(GetMousePosition(), startButton);
+            Color buttonColor = mouseOnStartButton ? YELLOW : WHITE;
+            
+            DrawRectangleRec(startButton, buttonColor);
+            DrawRectangleLinesEx(startButton, 3, DARKGRAY);
+            const char* startText = "START GAME";
+            int startTextWidth = MeasureText(startText, 24);
+            DrawText(startText, screenWidth/2 - startTextWidth/2, screenHeight/2 - 10, 24, DARKGRAY);
+            
+            // Check for button click
+            if(mouseOnStartButton && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                gameState = PLAYING;
+                is_started = true;
+            }
+        }
+        
+        // Draw game over screen
+        if(gameState == GAME_OVER) {
+            // Blur effect (semi-transparent overlay)
+            DrawRectangle(0, 0, screenWidth, screenHeight, (Color){0, 0, 0, 200});
+            
+            // Game Over text
+            const char* gameOverText = "GAME OVER";
+            int gameOverFontSize = 60;
+            int gameOverWidth = MeasureText(gameOverText, gameOverFontSize);
+            DrawText(gameOverText, screenWidth/2 - gameOverWidth/2, screenHeight/2 - 100, gameOverFontSize, RED);
+            
+            // Final score
+            const char* finalScoreText = TextFormat("Final Score: %d", score);
+            int scoreFontSize = 30;
+            int scoreWidth = MeasureText(finalScoreText, scoreFontSize);
+            DrawText(finalScoreText, screenWidth/2 - scoreWidth/2, screenHeight/2 - 30, scoreFontSize, WHITE);
+            
+            // Replay button
+            Rectangle replayButton = {screenWidth/2 - 100, screenHeight/2 + 30, 200, 50};
+            bool mouseOnReplayButton = CheckCollisionPointRec(GetMousePosition(), replayButton);
+            Color replayButtonColor = mouseOnReplayButton ? YELLOW : WHITE;
+            
+            DrawRectangleRec(replayButton, replayButtonColor);
+            DrawRectangleLinesEx(replayButton, 3, DARKGRAY);
+            const char* replayText = "REPLAY";
+            int replayTextWidth = MeasureText(replayText, 24);
+            DrawText(replayText, screenWidth/2 - replayTextWidth/2, screenHeight/2 + 40, 24, DARKGRAY);
+            
+            // Check for replay button click
+            if(mouseOnReplayButton && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+                // Reset game state
+                gameState = PLAYING;
+                is_dead = false;
+                currentState = RUNNING;
+                heart_count = MAX_LIVES;
+                score = 0;
+                catPosition = (Vector2){0.0f, 0.0f};
+                scrollingBack = 0.0f;
+                scrollingMid = 0.0f;
+                scrollingFore = 0.0f;
+                
+                // Reset platforms
+                for(int i = 0; i < MAX_PLATFORMS; i++){
+                    pl1[i].positionX = screenWidth + 1000.0f + i * 400.0f;
+                    pl2[i].positionX = screenWidth + 1200.0f + i * 400.0f;
+                }
+                
+                // Reset coins
+                for(int i = 0; i < COIN_COUNT; i++){
+                    coinPositions[i].x = GetRandomValue(150, 800);
+                    coinPositions[i].y = GetRandomValue(300, 400);
+                }
+            }
+        }
 
         EndDrawing();
         
