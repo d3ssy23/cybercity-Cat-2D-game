@@ -1,5 +1,6 @@
-
 # CyberCity Cat
+
+![Game Cover](cover.png)
 
 A 2D endless runner game built with C and raylib. Control a cat character as you navigate through platforms, collect coins, and avoid zombies in a cyberpunk cityscape.
 
@@ -22,11 +23,13 @@ A 2D endless runner game built with C and raylib. Control a cat character as you
 ### Installing raylib
 
 **macOS:**
+
 ```bash
 brew install raylib
 ```
 
 **Linux:**
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get install libraylib-dev
@@ -48,6 +51,7 @@ make
 The game will automatically launch after compilation.
 
 To clean build artifacts:
+
 ```bash
 make clean
 ```
@@ -65,4 +69,3 @@ make clean
 ## License
 
 This project is open source and available for educational purposes.
->>>>>>> 578a76b (readme)
